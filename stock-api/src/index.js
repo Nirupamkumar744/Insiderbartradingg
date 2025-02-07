@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const yahooFinance = require('yahoo-finance2').default;
 const moment = require('moment-timezone');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,11 +43,12 @@ const stocks = [
     "GMRAIRPORT.NS", "IRCTC.NS", "KEI.NS", "NAVINFLUOR.NS", "POLYCAB.NS", "SUNTV.NS", "UPL.NS"
 ];
 
+// Fetch last two hourly candles for each stock
 const fetchHourlyCandleData = async () => {
     const now = moment().tz("Asia/Kolkata");
-    const end1 = now.clone().startOf('hour'); // Last completed hour
-    const start1 = end1.clone().subtract(1, 'hour'); // Previous hour
-    const start2 = start1.clone().subtract(1, 'hour'); // 2nd previous hour
+    const end1 = now.clone().startOf('hour'); 
+    const start1 = end1.clone().subtract(1, 'hour'); 
+    const start2 = start1.clone().subtract(1, 'hour');
 
     let candleData = {};
 
@@ -64,26 +66,15 @@ const fetchHourlyCandleData = async () => {
             }
 
             const candles = result.quotes;
-
-            // Get last two complete hourly candles
             let motherCandle = candles[candles.length - 2] || {};
             let babyCandle = candles[candles.length - 1] || {};
 
-            // Convert timestamps to IST
             let motherTime = motherCandle.date ? moment(motherCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss") : null;
             let babyTime = babyCandle.date ? moment(babyCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss") : null;
 
             candleData[stock] = {
-                motherCandle: { 
-                    high: motherCandle.high, 
-                    low: motherCandle.low, 
-                    time: motherTime 
-                },
-                babyCandle: { 
-                    high: babyCandle.high, 
-                    low: babyCandle.low, 
-                    time: babyTime 
-                }
+                motherCandle: { high: motherCandle.high, low: motherCandle.low, time: motherTime },
+                babyCandle: { high: babyCandle.high, low: babyCandle.low, time: babyTime }
             };
         } catch (error) {
             console.error(`❌ Error fetching data for ${stock}:`, error.message);
@@ -92,7 +83,10 @@ const fetchHourlyCandleData = async () => {
     return candleData;
 };
 
-const checkInsideBars = (candleData) => {
+// Check for inside bars
+const checkInsideBars = async () => {
+    console.log(`🔄 Running Inside Bar Check at ${moment().tz("Asia/Kolkata").format("HH:mm:ss")}`);
+    const candleData = await fetchHourlyCandleData();
     let insideBarStatus = {};
 
     for (const stock in candleData) {
@@ -104,48 +98,34 @@ const checkInsideBars = (candleData) => {
                 motherCandle,
                 babyCandle
             };
-        } else {
-            insideBarStatus[stock] = { insideBar: null, motherCandle, babyCandle };
         }
     }
 
+    console.log("✅ Inside Bar Analysis Completed:", insideBarStatus);
     return insideBarStatus;
 };
 
-const fetchCurrentPrices = async () => {
-    let priceData = {};
-    for (const stock of stocks) {
-        try {
-            const quote = await yahooFinance.quote(stock);
-            priceData[stock] = quote.regularMarketPrice || null;
-        } catch (error) {
-            console.error(`❌ Error fetching price for ${stock}:`, error.message);
-        }
-    }
-    return priceData;
-};
-
-app.get('/inside-bar', async (req, res) => {
+// API Endpoint for manual execution
+app.get('/run-manual', async (req, res) => {
     try {
-        const candleData = await fetchHourlyCandleData();
-        const insideBars = checkInsideBars(candleData);
-        const currentPrices = await fetchCurrentPrices();
-
-        let finalData = {};
-        for (const stock in insideBars) {
-            finalData[stock] = {
-                currentPrice: currentPrices[stock] || null,
-                ...insideBars[stock]
-            };
-        }
-
-        res.json(finalData);
+        console.log("⚡ Manually Triggered Inside Bar Check");
+        const result = await checkInsideBars();
+        res.json(result);
     } catch (error) {
-        console.error("❌ Server Error:", error.message);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("❌ Error in manual execution:", error.message);
+        res.status(500).json({ error: "Error running manual check" });
     }
 });
 
+// Cron Job to run at 11:15 AM, 12:15 PM, 1:15 PM, 2:15 PM, 3:15 PM IST
+cron.schedule('15 11,12,13,14,15 * * *', async () => {
+    console.log("⏳ Scheduled Run Triggered");
+    await checkInsideBars();
+}, {
+    timezone: "Asia/Kolkata"
+});
+
+// Start Server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
