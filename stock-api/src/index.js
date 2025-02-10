@@ -3,6 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const yahooFinance = require('yahoo-finance2').default;
 const moment = require('moment-timezone');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,28 +44,34 @@ const stocks = [
     "GMRAIRPORT.NS", "IRCTC.NS", "KEI.NS", "NAVINFLUOR.NS", "POLYCAB.NS", "SUNTV.NS", "UPL.NS"
 ];
 
+// Store previous day's high and low in memory
+let previousDayData = {};
+
 // Fetch previous day's high & low
 const fetchPreviousDayHighLow = async () => {
     try {
         console.log("🔄 Fetching previous day's high & low...");
         const response = await axios.get('https://previous-day-high-production.up.railway.app/stocks');
         const data = response.data;
-        let highLowData = {};
+        previousDayData = {}; // Clear previous data
 
         data.forEach(stock => {
-            highLowData[stock.symbol] = {
+            previousDayData[stock.symbol] = {
                 high: stock.high,
                 low: stock.low
             };
         });
 
         console.log("✅ Previous day high & low fetched successfully.");
-        return highLowData;
     } catch (error) {
         console.error("❌ Error fetching previous day's high & low:", error.message);
-        return {};
     }
 };
+
+// Schedule the fetching of previous day's high & low at 9:30 AM every day
+cron.schedule('30 9 * * *', () => {
+    fetchPreviousDayHighLow();
+});
 
 // Fetch last two hourly candles (Completed for manual, Latest for scheduled)
 const fetchHourlyCandleData = async (manualRun = false) => {
@@ -114,7 +121,11 @@ const fetchHourlyCandleData = async (manualRun = false) => {
 const checkInsideBars = async (manualRun = false) => {
     console.log(`🔄 Checking for inside bars (Manual: ${manualRun}) at ${moment().tz("Asia/Kolkata").format("HH:mm:ss")}`);
 
-    const previousDayData = await fetchPreviousDayHighLow();
+    // Fetch latest high and low if manual run is true
+    if (manualRun) {
+        await fetchPreviousDayHighLow();
+    }
+
     const candleData = await fetchHourlyCandleData(manualRun);
     let insideBarStatus = [];
 
@@ -151,8 +162,7 @@ const checkInsideBars = async (manualRun = false) => {
         }
     }
 
-    return insideBarStatus;
-};
+    return insideBarStatus };
 
 // API Endpoint to Fetch Inside Bars
 app.get('/inside-bars', async (req, res) => {
@@ -166,6 +176,8 @@ app.get('/inside-bars', async (req, res) => {
     }
 });
 
+// Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    fetchPreviousDayHighLow(); // Initial fetch on server start
 });
