@@ -70,12 +70,15 @@ const fetchHourlyCandleData = async () => {
             let babyCandle = candles[candles.length - 1];
 
             // Check if baby candle is inside the mother candle
-            if (babyCandle.high <= motherCandle.high && babyCandle.low >= motherCandle.low) {
+            const isInsideBar = babyCandle.high <= motherCandle.high && babyCandle.low >= motherCandle.low;
+
+            if (isInsideBar) {
                 // Calculate mother candle gain/loss percentage
                 let motherCandleChange = ((motherCandle.close - motherCandle.open) / motherCandle.open) * 100;
 
                 insideBars.push({
                     symbol: stock,
+                    isInsideBar: true, // Indicate that an inside bar exists
                     type: "Neutral Inside Bar",
                     motherCandle: {
                         timestamp: moment(motherCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss"),
@@ -92,6 +95,12 @@ const fetchHourlyCandleData = async () => {
                         high: result.meta.previousClose,
                         low: motherCandle.low
                     }
+                });
+            } else {
+                // If no inside bar, still push the stock data with isInsideBar set to false
+                insideBars.push({
+                    symbol: stock,
+                    isInsideBar: false, // Indicate that no inside bar exists
                 });
             }
         } catch (error) {
