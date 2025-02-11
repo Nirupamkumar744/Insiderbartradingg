@@ -72,7 +72,8 @@ const fetchHourlyCandleData = async () => {
 
             // Check if baby candle is inside the mother candle
 
-            const isInsideBar = (babyCandle.high <= motherCandle.high) && (babyCandle.low <= motherCandle.low);
+           const isInsideBar = (babyCandle.high <= motherCandle.high) && (babyCandle.low >= motherCandle.low);
+
 
 
             if (isInsideBar) {
