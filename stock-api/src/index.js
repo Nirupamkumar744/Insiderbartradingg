@@ -42,10 +42,8 @@ const stocks = [
     "GMRAIRPORT.NS", "IRCTC.NS", "KEI.NS", "NAVINFLUOR.NS", "POLYCAB.NS", "SUNTV.NS", "UPL.NS"
 ];
 
-// Variable to store the last successful inside bar data
 let lastInsideBarsData = null;
 
-// Fetch last two hourly candles
 const fetchHourlyCandleData = async () => {
     const now = moment().tz("Asia/Kolkata");
     const end = now.clone().startOf('hour');
@@ -66,17 +64,14 @@ const fetchHourlyCandleData = async () => {
                 continue;
             }
 
-            const candles = result.quotes;
-            let motherCandle = candles[candles.length - 2];
-            let babyCandle = candles[candles.length - 1];
+            const candles = result.quotes.slice(-2); // Ensure we take the last 2 candles
 
-            // Check if baby candle is inside the mother candle
+            const motherCandle = candles[0]; // First of the last two candles
+            const babyCandle = candles[1]; // Most recent candle
 
-            const isInsideBar = (babyCandle.high <= motherCandle.high) && (babyCandle.low >= motherCandle.low);
-
+            const isInsideBar = babyCandle.high <= motherCandle.high && babyCandle.low >= motherCandle.low;
 
             if (isInsideBar) {
-                // Calculate mother candle gain/loss percentage
                 let motherCandleChange = ((motherCandle.close - motherCandle.open) / motherCandle.open) * 100;
 
                 insideBars.push({
@@ -100,36 +95,18 @@ const fetchHourlyCandleData = async () => {
                     }
                 });
             } else {
-                insideBars.push({
-                    symbol: stock,
-                    isInsideBar: false,
-                });
+                insideBars.push({ symbol: stock, isInsideBar: false });
             }
         } catch (error) {
             console.error(`❌ Error fetching data for ${stock}:`, error.message);
         }
     }
 
-    // Store the last successful data
     lastInsideBarsData = insideBars;
     return insideBars;
 };
 
-// API endpoint to get inside bars
 app.get('/inside-bars', async (req, res) => {
-    const now = moment().tz("Asia/Kolkata");
-    const scheduledTime = now.clone().startOf('hour'); // Define your scheduled time logic here
-
-    // Check if the current time is within the scheduled time
-    if (now.isBefore(scheduledTime)) {
-        // If it's before the scheduled time, return the last successful data
-        if (lastInsideBarsData) {
-            return res.json(lastInsideBarsData);
-        } else {
-            return res.status(404).json({ error: "No data available yet." });
-        }
-    }
-
     try {
         const data = await fetchHourlyCandleData();
         res.json(data);
@@ -138,8 +115,6 @@ app.get('/inside-bars', async (req, res) => {
     }
 });
 
-// Start the server
 app.listen(PORT, () => {
-
     console.log(`Server is running on port ${PORT}`);
 });
