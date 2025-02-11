@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const yahooFinance = require('yahoo-finance2').default;
 const moment = require('moment-timezone');
+const axios = require('axios');
+const schedule = require('node-schedule');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,18 +53,23 @@ const fetchHourlyCandleData = async () => {
 
     let insideBars = [];
 
-    for (const stock of stocks) {
-        try {
-            const result = await yahooFinance.chart(stock, {
-                period1: start.toISOString(),
-                period2: end.toISOString(),
-                interval: '1h'
-            });
+    try {
+        const prevDayResponse = await axios.get(PREVIOUS_DAY_API);
+        const prevDayData = prevDayResponse.data;
 
-            if (!result || !result.quotes || result.quotes.length < 2) {
-                console.log(`⚠️ Not enough candles for ${stock}`);
-                continue;
-            }
+        for (const stock of stocks) {
+            try {
+                const result = await yahooFinance.chart(stock, {
+                    period1: start.toISOString(),
+                    period2: end.toISOString(),
+                    interval: '1h'
+                });
+
+                if (!result || !result.quotes || result.quotes.length < 2) {
+                    console.log(`⚠️ Not enough candles for ${stock}`);
+                    insideBars.push({ symbol: stock, isInsideBar: false });
+                    continue;
+                }
 
             const candles = result.quotes.slice(-2); // Ensure we take the last 2 candles
 
@@ -76,8 +83,8 @@ const fetchHourlyCandleData = async () => {
 
                 insideBars.push({
                     symbol: stock,
-                    isInsideBar: true,
-                    type: "Neutral Inside Bar",
+                    isInsideBar,
+                    type: isInsideBar ? type : "N/A",
                     motherCandle: {
                         timestamp: moment(motherCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss"),
                         high: motherCandle.high,
@@ -90,8 +97,8 @@ const fetchHourlyCandleData = async () => {
                         low: babyCandle.low
                     },
                     prevDay: {
-                        high: result.meta.previousClose,
-                        low: motherCandle.low
+                        high: prevDayHigh,
+                        low: prevDayLow
                     }
                 });
             } else {
