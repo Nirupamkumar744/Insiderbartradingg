@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 const yahooFinance = require('yahoo-finance2').default;
 const moment = require('moment-timezone');
-const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,10 +37,13 @@ const stocks = [
     "MAXHEALTH.NS", "METROPOLIS.NS", "BHARTIARTL.NS", "HFCL.NS", "IDEA.NS", "INDUSTOWER.NS",
     "DLF.NS", "GODREJPROP.NS", "LODHA.NS", "OBEROIRLTY.NS", "PRESTIGE.NS", "GUJGASLTD.NS",
     "IGL.NS", "MGL.NS", "CONCOR.NS", "CESC.NS", "HUDCO.NS", "IRFC.NS", "ABBOTINDIA.NS",
-    "BEL.NS", "CGPOWER.NS", "CUMMINSIND.NS", "HAL.NS","SIEMENS.NS", "TIINDIA.NS",
+    "BEL.NS", "CGPOWER.NS", "CUMMINSIND.NS", "HAL.NS", "SIEMENS.NS", "TIINDIA.NS",
     "CHAMBLFERT.NS", "COROMANDEL.NS", "GNFC.NS", "PIIND.NS", "BSE.NS", "DELHIVERY.NS",
     "GMRAIRPORT.NS", "IRCTC.NS", "KEI.NS", "NAVINFLUOR.NS", "POLYCAB.NS", "SUNTV.NS", "UPL.NS"
 ];
+
+// Variable to store the last successful inside bar data
+let lastInsideBarsData = null;
 
 // Fetch last two hourly candles
 const fetchHourlyCandleData = async () => {
@@ -70,7 +71,7 @@ const fetchHourlyCandleData = async () => {
             let babyCandle = candles[candles.length - 1];
 
             // Check if baby candle is inside the mother candle
-            const isInsideBar = babyCandle.high <= motherCandle.high && babyCandle.low >= motherCandle.low;
+            const isInsideBar = (babyCandle.high <= motherCandle.high) && (babyCandle.low >= motherCandle.low);
 
             if (isInsideBar) {
                 // Calculate mother candle gain/loss percentage
@@ -78,13 +79,13 @@ const fetchHourlyCandleData = async () => {
 
                 insideBars.push({
                     symbol: stock,
-                    isInsideBar: true, // Indicate that an inside bar exists
+                    isInsideBar: true,
                     type: "Neutral Inside Bar",
                     motherCandle: {
                         timestamp: moment(motherCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss"),
                         high: motherCandle.high,
                         low: motherCandle.low,
-                        change: motherCandleChange.toFixed(2) + "%"  // New field added
+                        change: motherCandleChange.toFixed(2) + "%"
                     },
                     babyCandle: {
                         timestamp: moment(babyCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss"),
@@ -97,10 +98,9 @@ const fetchHourlyCandleData = async () => {
                     }
                 });
             } else {
-                // If no inside bar, still push the stock data with isInsideBar set to false
                 insideBars.push({
                     symbol: stock,
-                    isInsideBar: false, // Indicate that no inside bar exists
+                    isInsideBar: false,
                 });
             }
         } catch (error) {
@@ -108,11 +108,26 @@ const fetchHourlyCandleData = async () => {
         }
     }
 
+    // Store the last successful data
+    lastInsideBarsData = insideBars;
     return insideBars;
 };
 
 // API endpoint to get inside bars
 app.get('/inside-bars', async (req, res) => {
+    const now = moment().tz("Asia/Kolkata");
+    const scheduledTime = now.clone().startOf('hour'); // Define your scheduled time logic here
+
+    // Check if the current time is within the scheduled time
+    if (now.isBefore(scheduledTime)) {
+        // If it's before the scheduled time, return the last successful data
+        if (lastInsideBarsData) {
+            return res.json(lastInsideBarsData);
+        } else {
+            return res.status(404).json({ error: "No data available yet." });
+        }
+    }
+
     try {
         const data = await fetchHourlyCandleData();
         res.json(data);
@@ -123,5 +138,5 @@ app.get('/inside-bars', async (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
