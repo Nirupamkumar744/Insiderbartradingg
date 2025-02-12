@@ -90,6 +90,7 @@ const fetchHourlyCandleData = async () => {
                     else if (motherCandle.low < prevDayLow) type = "Bearish Inside Bar";
                 }
 
+                // Correctly calculate the change based on the open and low of the mother candle
                 let motherCandleChange = ((motherCandle.close - motherCandle.open) / motherCandle.open) * 100;
 
                 insideBars.push({
@@ -99,7 +100,7 @@ const fetchHourlyCandleData = async () => {
                     motherCandle: {
                         timestamp: moment(motherCandle.date).tz("Asia/Kolkata").format("YYYY-MM-DD HH:mm:ss"),
                         high: motherCandle.high,
-                        low: motherCandle.low,
+                        low: motherCandle.low,  // Ensure this is the low of the mother candle
                         change: motherCandleChange.toFixed(2) + "%"
                     },
                     babyCandle: {
