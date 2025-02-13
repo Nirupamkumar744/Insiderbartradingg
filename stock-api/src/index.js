@@ -51,7 +51,7 @@ const fetchHourlyCandleData = async () => {
 
                 const isInsideBar = babyCandle.high <= motherCandle.high && babyCandle.low >= motherCandle.low;
 
-                // Get previous day's high and low
+                
                 const prevDayStock = prevDayData.find(item => item.symbol === stock);
                 const prevDayHigh = prevDayStock ? prevDayStock.high : null;
                 const prevDayLow = prevDayStock ? prevDayStock.low : null;
